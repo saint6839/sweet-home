@@ -1,14 +1,7 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Query,
-  HttpException,
-  HttpStatus,
-  Logger,
-} from '@nestjs/common';
+import { Controller, Get, Post, Query, Logger } from '@nestjs/common';
 import { CrawlerService } from './crawler.service';
 import { CrawlResultDto } from './dto/crawl-result.dto';
+import { CrawlDistrictQueryDto } from './dto/crawl-district-query.dto';
 
 /**
  * Controller for housing complex crawling operations
@@ -24,46 +17,13 @@ export class CrawlerController {
    * GET /api/crawler/housing-complexes?district=강남구
    */
   @Get('housing-complexes')
-  async crawlHousingComplexes(@Query('district') district: string): Promise<CrawlResultDto> {
-    if (!district) {
-      throw new HttpException(
-        {
-          statusCode: HttpStatus.BAD_REQUEST,
-          message: 'District parameter is required',
-        },
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    this.logger.log(`Received request to crawl housing complexes. District: ${district}`);
-
-    try {
-      const result = await this.crawlerService.crawlByDistrict(district);
-
-      if (!result.success) {
-        throw new HttpException(
-          {
-            statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-            message: 'Crawling failed',
-            error: result.error,
-          },
-          HttpStatus.INTERNAL_SERVER_ERROR,
-        );
-      }
-
-      return result;
-    } catch (error) {
-      this.logger.error('Failed to crawl housing complexes', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new HttpException(
-        {
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: 'Failed to crawl housing complexes',
-          error: errorMessage,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
+  async crawlHousingComplexes(
+    @Query() query: CrawlDistrictQueryDto,
+  ): Promise<CrawlResultDto> {
+    this.logger.log(
+      `Received request to crawl housing complexes. District: ${query.district}`,
+    );
+    return this.crawlerService.crawlByDistrict(query.district);
   }
 
   /**
@@ -75,41 +35,16 @@ export class CrawlerController {
     success: boolean;
     savedCount: number;
     message: string;
-    error?: string;
   }> {
     this.logger.log('Received request to sync housing complexes to database');
 
-    try {
-      const result = await this.crawlerService.syncToDatabase();
+    const result = await this.crawlerService.syncToDatabase();
 
-      if (!result.success) {
-        throw new HttpException(
-          {
-            statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-            message: 'Failed to sync to database',
-            error: result.error,
-          },
-          HttpStatus.INTERNAL_SERVER_ERROR,
-        );
-      }
-
-      return {
-        success: true,
-        savedCount: result.savedCount,
-        message: `Successfully synced ${result.savedCount} housing complexes to database`,
-      };
-    } catch (error) {
-      this.logger.error('Failed to sync to database', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new HttpException(
-        {
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: 'Failed to sync to database',
-          error: errorMessage,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
+    return {
+      success: true,
+      savedCount: result.savedCount,
+      message: `Successfully synced ${result.savedCount} housing complexes to database`,
+    };
   }
 
   /**
