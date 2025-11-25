@@ -66,8 +66,12 @@ describe('CrawlerController', () => {
     });
   });
 
-  describe('crawlAllHousingComplexes', () => {
-    it('should return crawl result on success', async () => {
+  describe('crawlHousingComplexes', () => {
+    it('should throw error if district is not provided', async () => {
+      await expect(controller.crawlHousingComplexes('')).rejects.toThrow();
+    });
+
+    it('should return district crawl result when district is provided', async () => {
       const mockResult = {
         success: true,
         data: [
@@ -80,11 +84,11 @@ describe('CrawlerController', () => {
         totalCount: 1,
         crawledAt: new Date(),
       };
-      mockCrawlerService.crawlAllDistricts.mockResolvedValue(mockResult);
+      mockCrawlerService.crawlByDistrict.mockResolvedValue(mockResult);
 
-      const result = await controller.crawlAllHousingComplexes();
-      expect(result.success).toBe(true);
-      expect(result.totalCount).toBe(1);
+      const result = await controller.crawlHousingComplexes('강남구');
+      expect(mockCrawlerService.crawlByDistrict).toHaveBeenCalledWith('강남구');
+      expect(result).toBe(mockResult);
     });
   });
 });

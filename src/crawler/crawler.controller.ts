@@ -2,7 +2,7 @@ import {
   Controller,
   Get,
   Post,
-  Param,
+  Query,
   HttpException,
   HttpStatus,
   Logger,
@@ -20,15 +20,25 @@ export class CrawlerController {
   constructor(private readonly crawlerService: CrawlerService) {}
 
   /**
-   * Crawl all housing complexes from all districts
-   * GET /api/crawler/housing-complexes
+   * Crawl housing complexes from a specific district
+   * GET /api/crawler/housing-complexes?district=강남구
    */
   @Get('housing-complexes')
-  async crawlAllHousingComplexes(): Promise<CrawlResultDto> {
-    this.logger.log('Received request to crawl all housing complexes');
+  async crawlHousingComplexes(@Query('district') district: string): Promise<CrawlResultDto> {
+    if (!district) {
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.BAD_REQUEST,
+          message: 'District parameter is required',
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    this.logger.log(`Received request to crawl housing complexes. District: ${district}`);
 
     try {
-      const result = await this.crawlerService.crawlAllDistricts();
+      const result = await this.crawlerService.crawlByDistrict(district);
 
       if (!result.success) {
         throw new HttpException(
@@ -49,43 +59,6 @@ export class CrawlerController {
         {
           statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
           message: 'Failed to crawl housing complexes',
-          error: errorMessage,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-  }
-
-  /**
-   * Crawl housing complexes from a specific district
-   * GET /api/crawler/housing-complexes/:district
-   */
-  @Get('housing-complexes/:district')
-  async crawlByDistrict(@Param('district') district: string): Promise<CrawlResultDto> {
-    this.logger.log(`Received request to crawl district: ${district}`);
-
-    try {
-      const result = await this.crawlerService.crawlByDistrict(district);
-
-      if (!result.success) {
-        throw new HttpException(
-          {
-            statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-            message: `Crawling failed for district: ${district}`,
-            error: result.error,
-          },
-          HttpStatus.INTERNAL_SERVER_ERROR,
-        );
-      }
-
-      return result;
-    } catch (error) {
-      this.logger.error(`Failed to crawl district: ${district}`, error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new HttpException(
-        {
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: `Failed to crawl district: ${district}`,
           error: errorMessage,
         },
         HttpStatus.INTERNAL_SERVER_ERROR,
