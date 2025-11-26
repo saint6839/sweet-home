@@ -5,6 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import * as puppeteer from 'puppeteer';
+import * as crypto from 'crypto';
 import { IHousingComplex, ICrawlResult, IDistrict } from './interfaces/housing-complex.interface';
 import { PrismaService } from '../database/prisma.service';
 
@@ -129,43 +130,102 @@ export class CrawlerService {
   }
 
   /**
-   * Crawl and sync data to database
+   * Crawl and sync data to database, returning changed items
    */
-  async syncToDatabase(): Promise<{ success: boolean; savedCount: number }> {
+  async syncToDatabase(): Promise<{ success: boolean; savedCount: number; changes: IHousingComplex[] }> {
     this.logger.log('Starting sync to database');
 
     try {
-      const crawlResult = await this.crawlAllDistricts();
+      // Only crawl '전체' district
+      const crawlResult = await this.crawlByDistrict('전체');
+      
+      const changes: IHousingComplex[] = [];
+      const existingComplexes = await this.prismaService.housingComplex.findMany();
 
-      // Delete existing data
-      await this.prismaService.housingComplex.deleteMany();
+      // Create a map for faster lookup
+      const existingMap = new Map<string, string | null>(); // key: name+district, value: dataHash
+      existingComplexes.forEach(c => {
+        existingMap.set(`${c.name}-${c.district}`, c.dataHash);
+      });
 
-      // Insert new data
-      const createPromises = crawlResult.data.map((complex) =>
-        this.prismaService.housingComplex.create({
-          data: {
-            name: complex.name,
-            district: complex.district,
-            address: complex.address,
-            imageUrl: complex.imageUrl,
-            detailUrl: complex.detailUrl,
-            description: complex.description,
-          },
-        }),
-      );
+      // Update or Create
+      for (const complex of crawlResult.data) {
+        const hash = this.computeHash(complex);
+        const key = `${complex.name}-${complex.district}`;
+        const existingHash = existingMap.get(key);
 
-      await Promise.all(createPromises);
+        // If it's a new item or hash is different
+        if (!existingMap.has(key) || existingHash !== hash) {
+          // Upsert logic
+          // We need to find the ID if it exists to update it, otherwise create.
+          // Since we don't have unique constraints on name+district easily usable in upsert without composite key,
+          // we'll search first.
+          const existingRecord = existingComplexes.find(c => c.name === complex.name && c.district === complex.district);
 
-      this.logger.log(`Sync completed. Saved ${crawlResult.data.length} complexes to database`);
+          if (existingRecord) {
+             await this.prismaService.housingComplex.update({
+                where: { id: existingRecord.id },
+                data: {
+                  address: complex.address,
+                  imageUrl: complex.imageUrl,
+                  detailUrl: complex.detailUrl,
+                  description: complex.description,
+                  dataHash: hash,
+                },
+             });
+             // Only track as "changed" if it existed before (modification), or maybe new ones too?
+             // User said: "이전에 저장했던 상태에서 바뀌어서 상태가 발생할때마다" -> implying updates.
+             // But new items are also technically changes. Let's include updates where description changed.
+             // The user specifically mentioned "description" (status) changes.
+             // Let's check if description changed specifically for better notification quality.
+             if (existingRecord.description !== complex.description) {
+                changes.push(complex);
+             }
+          } else {
+             await this.prismaService.housingComplex.create({
+                data: {
+                  name: complex.name,
+                  district: complex.district,
+                  address: complex.address,
+                  imageUrl: complex.imageUrl,
+                  detailUrl: complex.detailUrl,
+                  description: complex.description,
+                  dataHash: hash,
+                },
+             });
+             // New item
+             // changes.push(complex); // Uncomment if we want to notify about new items too
+          }
+        }
+      }
+
+      // We are not deleting old items that are no longer in the crawl result for now,
+      // as they might just be temporarily unavailable or moved to another page.
+      // But usually sync implies mirroring state.
+      // If we want to delete items that are gone:
+      // 1. Collect all IDs processed.
+      // 2. Delete where ID not in processed list.
+      // Keeping it simple as per request (focus on updates).
+
+      this.logger.log(`Sync completed. Saved ${crawlResult.data.length} complexes. Changes detected: ${changes.length}`);
 
       return {
         success: true,
         savedCount: crawlResult.data.length,
+        changes,
       };
     } catch (error) {
       this.logger.error('Sync to database failed', error);
       throw new InternalServerErrorException('Failed to sync to database');
     }
+  }
+
+  /**
+   * Compute hash for change detection
+   */
+  private computeHash(complex: IHousingComplex): string {
+    const data = `${complex.name}|${complex.district}|${complex.address}|${complex.detailUrl}|${complex.description}`;
+    return crypto.createHash('sha256').update(data).digest('hex');
   }
 
   /**
@@ -291,17 +351,6 @@ export class CrawlerService {
       return complexes;
     } catch (error) {
       this.logger.error(`Failed to crawl district: ${district.name}`, error);
-      // Return empty array for individual district crawl failure in a loop, or rethrow?
-      // If this is called from crawlByDistrict, we want it to fail.
-      // If called from crawlAllDistricts, we might want to continue?
-      // For now, I'll let it return empty array to be safe as it was before, but log it.
-      // Actually, if it fails, `crawlByDistrict` will catch it?
-      // `crawlDistrictPage` catches errors and returns [].
-      // This seems acceptable for partial failures in `crawlAllDistricts`.
-      // For `crawlByDistrict`, it will return empty data with success=true, which might be misleading if the page load failed.
-      // But let's stick to the plan: service layer handling logic.
-      // If I want to be strict, I should rethrow here and handle in the caller.
-      // But preserving existing behavior for `crawlDistrictPage` (returning []) is safer for now to avoid breaking the loop in `crawlAllDistricts`.
       return [];
     }
   }
