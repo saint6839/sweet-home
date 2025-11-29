@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { MailerService } from '@nestjs-modules/mailer';
-import { ConfigService } from '@nestjs/config';
 import { IHousingComplex } from '../crawler/interfaces/housing-complex.interface';
+import { SubscriptionService } from '../subscription/subscription.service';
 
 @Injectable()
 export class NotificationService {
@@ -9,14 +9,14 @@ export class NotificationService {
 
   constructor(
     private readonly mailerService: MailerService,
-    private readonly configService: ConfigService,
+    private readonly subscriptionService: SubscriptionService,
   ) {}
 
   async sendUpdateNotification(changes: IHousingComplex[]) {
-    const to = this.configService.get<string>('NOTIFICATION_EMAIL_TO');
+    const subscribers = await this.subscriptionService.getAllActiveSubscribers();
 
-    if (!to) {
-      this.logger.warn('No notification email address configured.');
+    if (subscribers.length === 0) {
+      this.logger.warn('No active subscribers found.');
       return;
     }
 
@@ -26,14 +26,19 @@ export class NotificationService {
 
     const subject = `[청년안심주택] ${changes.length}건의 변동사항이 감지되었습니다.`;
     const html = this.generateEmailContent(changes);
+    const recipientEmails = subscribers.map((sub: { email: string }) => sub.email);
 
     try {
+      // Send individually to protect privacy (or use BCC)
+      // Using BCC for efficiency as per plan
       await this.mailerService.sendMail({
-        to,
+        bcc: recipientEmails,
         subject,
         html,
       });
-      this.logger.log(`Notification sent to ${to} for ${changes.length} changes.`);
+      this.logger.log(
+        `Notification sent to ${subscribers.length} subscribers for ${changes.length} changes.`,
+      );
     } catch (error) {
       this.logger.error('Failed to send notification email', error);
     }
@@ -63,10 +68,10 @@ export class NotificationService {
           ${listItems}
         </div>
         <p style="font-size: 12px; color: #999; margin-top: 20px;">
-          본 메일은 자동 발송되었습니다.
+          본 메일은 자동 발송되었습니다. <br/>
+          수신을 원치 않으시면 API를 통해 구독을 취소해주세요.
         </p>
       </div>
     `;
   }
 }
-

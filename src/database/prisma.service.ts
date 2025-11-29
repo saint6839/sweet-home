@@ -6,23 +6,15 @@ import { PrismaClient } from '@prisma/client';
  * Handles connection lifecycle and provides database access
  */
 @Injectable()
-export class PrismaService implements OnModuleInit, OnModuleDestroy {
-  private prismaClient: PrismaClient;
-
-  constructor() {
-    this.prismaClient = new PrismaClient();
-  }
-
-  get housingComplex() {
-    return this.prismaClient.housingComplex;
-  }
-
+export class PrismaService
+  extends PrismaClient
+  implements OnModuleInit, OnModuleDestroy
+{
   async onModuleInit(): Promise<void> {
-    await this.prismaClient.$connect();
+    await this.$connect();
   }
 
   async onModuleDestroy(): Promise<void> {
-    await this.prismaClient.$disconnect();
+    await this.$disconnect();
   }
 }
-

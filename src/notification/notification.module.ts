@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { NotificationService } from './notification.service';
+import { SubscriptionModule } from '../subscription/subscription.module';
 
 @Module({
   imports: [
@@ -22,9 +23,9 @@ import { NotificationService } from './notification.service';
       }),
       inject: [ConfigService],
     }),
+    SubscriptionModule,
   ],
   providers: [NotificationService],
   exports: [NotificationService],
 })
 export class NotificationModule {}
-

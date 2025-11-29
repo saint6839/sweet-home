@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { PrismaModule } from './database/prisma.module';
 import { CrawlerModule } from './crawler/crawler.module';
 import { NotificationModule } from './notification/notification.module';
+import { SubscriptionModule } from './subscription/subscription.module';
 import { CrawlerScheduler } from './scheduler/crawler.scheduler';
 
 @Module({
@@ -17,6 +18,7 @@ import { CrawlerScheduler } from './scheduler/crawler.scheduler';
     PrismaModule,
     CrawlerModule,
     NotificationModule,
+    SubscriptionModule,
   ],
   controllers: [AppController],
   providers: [AppService, CrawlerScheduler],
