@@ -44,6 +44,26 @@ export class NotificationService {
     }
   }
 
+  async sendTestEmail(email: string) {
+    try {
+      await this.mailerService.sendMail({
+        to: email,
+        subject: '[청년안심주택] 테스트 메일입니다.',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>테스트 메일</h2>
+            <p>이 메일은 알림 서비스 테스트를 위해 발송되었습니다.</p>
+            <p>메일이 정상적으로 수신되었다면 알림 서비스가 올바르게 설정된 것입니다.</p>
+          </div>
+          `,
+      });
+      this.logger.log(`Test email sent to ${email}`);
+    } catch (error) {
+      this.logger.error(`Failed to send test email to ${email}`, error);
+      throw error;
+    }
+  }
+
   private generateEmailContent(changes: IHousingComplex[]): string {
     let listItems = '';
 

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { NotificationService } from './notification.service';
+import { NotificationController } from './notification.controller';
 import { SubscriptionModule } from '../subscription/subscription.module';
 
 @Module({
@@ -25,6 +26,7 @@ import { SubscriptionModule } from '../subscription/subscription.module';
     }),
     SubscriptionModule,
   ],
+  controllers: [NotificationController],
   providers: [NotificationService],
   exports: [NotificationService],
 })
